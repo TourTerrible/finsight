@@ -3,49 +3,18 @@ name: CI/CD
 on:
   push:
     branches: [ main ]
-
-jobs:
-  deploy:
-    runs-on: ubuntu-latest
-    permissions:
-      id-token: write   # required for OIDC
-      contents: read
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      # Authenticate to GCP via Workload Identity Federation
-      - name: Auth to Google Cloud
-        uses: google-github-actions/auth@v2
-        with:
-          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
-          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
-          project_id: ${{ secrets.GCP_PROJECT_ID }}
-
-      - name: Setup gcloud
-        uses: google-github-actions/setup-gcloud@v2
-        with:
-          version: ">= 471.0.0"
-          
-
-name: Deploy to GCP
-
-on:
-  push:
-    branches: [ main ]
   pull_request:
     branches: [ main ]
 
 env:
-  GCP_REGION: us-central1
+  GCP_REGION: asia-south1
   PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
 
 jobs:
   test:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       
       - name: Set up Node.js
         uses: actions/setup-node@v3
@@ -83,14 +52,24 @@ jobs:
     needs: test
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main'
+    permissions:
+      id-token: write   # required for OIDC
+      contents: read
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       
-      - name: Set up Google Cloud CLI
-        uses: google-github-actions/setup-gcloud@v1
+      # Authenticate to GCP via Workload Identity Federation
+      - name: Auth to Google Cloud
+        uses: google-github-actions/auth@v2
         with:
-          service_account_key: ${{ secrets.GCP_SA_KEY }}
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
           project_id: ${{ secrets.GCP_PROJECT_ID }}
+      
+      - name: Setup gcloud
+        uses: google-github-actions/setup-gcloud@v2
+        with:
+          version: ">= 471.0.0"
       
       - name: Configure Docker for GCR
         run: gcloud auth configure-docker
@@ -114,14 +93,15 @@ jobs:
             --set-env-vars="GOOGLE_CLIENT_SECRET=${{ secrets.GOOGLE_CLIENT_SECRET }}" \
             --set-env-vars="OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }}" \
             --set-env-vars="GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }}" \
-            --set-env-vars="GOOGLE_CLIENT_PROJECT_ID=${{ secrets.GCP_PROJECT_ID }}"
+            --set-env-vars="GOOGLE_CLIENT_PROJECT_ID=${{ secrets.GCP_PROJECT_ID }}" \
+            --set-env-vars="GCP_REGION=${{ env.GCP_REGION }}"
 
   deploy-frontend:
     needs: test
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main'
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       
       - name: Set up Node.js
         uses: actions/setup-node@v3
@@ -151,42 +131,51 @@ jobs:
           projectId: ${{ secrets.FIREBASE_PROJECT_ID }}
           channelId: live
 
-  deploy-database:
-    needs: test
-    runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main'
-    steps:
-    - uses: actions/checkout@v4
-    
-    - name: Setup Google Cloud CLI
-      uses: google-github-actions/setup-gcloud@v2
-      with:
-        service_account_key: ${{ secrets.GCP_SA_KEY }}
-        project_id: ${{ secrets.GCP_PROJECT_ID }}
-    
-    - name: Create Cloud SQL instance if not exists
-      run: |
-        gcloud sql instances create finsight-db \
-          --database-version=POSTGRES_15 \
-          --tier=db-f1-micro \
-          --region=${{ env.GCP_REGION }} \
-          --root-password=${{ secrets.DB_ROOT_PASSWORD }} \
-          --storage-type=HDD \
-          --storage-size=10GB \
-          --backup-start-time=02:00 \
-          --maintenance-window-day=SUN \
-          --maintenance-window-hour=02 \
-          --quiet || echo "Instance already exists"
-    
-    - name: Create database if not exists
-      run: |
-        gcloud sql databases create finsight \
-          --instance=finsight-db \
-          --quiet || echo "Database already exists"
-    
-    - name: Create user if not exists
-      run: |
-        gcloud sql users create finsight \
-          --instance=finsight-db \
-          --password=${{ secrets.DB_PASSWORD }} \
-          --quiet || echo "User already exists" 
+  # Database setup skipped - using existing Cloud SQL instance
+  # deploy-database:
+  #   needs: test
+  #   runs-on: ubuntu-latest
+  #   if: github.ref == 'refs/heads/main'
+  #   permissions:
+  #     id-token: write   # required for OIDC
+  #     contents: read
+  #   steps:
+  #     - uses: actions/checkout@v4
+  #     
+  #     # Authenticate to GCP via Workload Identity Federation
+  #     - name: Auth to Google Cloud
+  #       uses: google-github-actions/auth@v2
+  #       with:
+  #         workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+  #         service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+  #         project_id: ${{ secrets.GCP_PROJECT_ID }}
+  #     
+  #     - name: Setup gcloud
+  #       uses: google-github-actions/setup-gcloud@v2
+  #       with:
+  #         version: ">= 471.0.0"
+  #     
+  #     - name: Create Cloud SQL instance if not exists
+  #       run: |
+  #         gcloud sql instances create finsight-db \
+  #           --database-version=POSTGRES_15 \
+  #           --tier=db-f1-micro \
+  #           --region=${{ env.GCP_REGION }} \
+  #           --root-password=${{ secrets.DB_ROOT_PASSWORD }} \
+  #           --storage-type=SSD \
+  #           --storage-size=10GB \
+  #           --backup-start-time=02:00 \
+  #           --enable-backup \
+  #           --quiet || echo "Instance already exists"
+  #     
+  #     - name: Create database if not exists
+  #       run: |
+  #         gcloud sql databases create finsight \
+  #           --instance=finsight-db \
+  #           --quiet || echo "Database already exists"
+  #     
+  #     - name: Create user if not exists
+  #       run: |
+  #         gcloud sql users create finsight \
+  #           --password=${{ secrets.DB_PASSWORD }} \
+  #             --quiet || echo "User already exists" 

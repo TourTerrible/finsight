@@ -13,7 +13,7 @@ NC='\033[0m' # No Color
 
 # Configuration
 PROJECT_ID=${GCP_PROJECT_ID:-"your-gcp-project-id"}
-REGION=${GCP_REGION:-"us-central1"}
+REGION=${GCP_REGION:-"asia-south1"}
 FIREBASE_PROJECT_ID=${FIREBASE_PROJECT_ID:-"your-firebase-project-id"}
 
 echo -e "${GREEN}🚀 Starting FinSight deployment...${NC}"

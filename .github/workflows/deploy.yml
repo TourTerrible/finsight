@@ -66,14 +66,20 @@ jobs:
           service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
           project_id: ${{ secrets.GCP_PROJECT_ID }}
       
+
+      - name: Who am I on GCP?
+        run: |
+          gcloud auth list
+          gcloud config list
+
       - name: Setup gcloud
         uses: google-github-actions/setup-gcloud@v2
         with:
           version: ">= 471.0.0"
       
-      - name: Configure Docker for GCR
-        run: gcloud auth configure-docker
-      
+      # - name: Configure Docker for GCR
+      #   run: gcloud auth configure-docker
+
       - name: Setup Artifact Registry
         run: |
           gcloud artifacts repositories create finsight-repo \

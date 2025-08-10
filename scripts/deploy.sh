@@ -106,10 +106,14 @@ deploy_backend() {
     # Build and push Docker image
     echo "Building backend Docker image..."
     cd backend
-    docker build -t $REGION-docker.pkg.dev/$PROJECT_ID/finsight-repo/finsight-backend:latest .
     
-    echo "Pushing to Artifact Registry..."
-    docker push $REGION-docker.pkg.dev/$PROJECT_ID/finsight-repo/finsight-backend:latest
+    # Build for AMD64 platform (required for Cloud Run)
+    docker buildx create --use --name finsight-builder || true
+    docker buildx build --platform linux/amd64 \
+        -t $REGION-docker.pkg.dev/$PROJECT_ID/finsight-repo/finsight-backend:latest \
+        --push .
+    
+    echo "✅ AMD64 image built and pushed to Artifact Registry"
     
     # Deploy to Cloud Run
     echo "Deploying to Cloud Run..."

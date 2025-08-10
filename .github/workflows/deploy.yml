@@ -98,17 +98,22 @@ jobs:
       
       - name: Build and push backend image
         uses: docker/build-push-action@v5
+        env:
+          REGISTRY: asia-south1-docker.pkg.dev
+          IMAGE_NAME: finsight-repo/finsight-backend
         with:
           context: ./backend
           platforms: linux/amd64
           push: true
-          tags: |
-            asia-south1-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/finsight-repo/finsight-backend:${{ github.sha }}
+          tags: ${{ env.REGISTRY }}/${{ secrets.GCP_PROJECT_ID }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
       
       - name: Deploy backend to Cloud Run
+        env:
+          REGISTRY: asia-south1-docker.pkg.dev
+          IMAGE_NAME: finsight-repo/finsight-backend
         run: |
           gcloud run deploy finsight-backend \
-            --image asia-south1-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/finsight-repo/finsight-backend:${{ github.sha }} \
+            --image ${{ env.REGISTRY }}/${{ secrets.GCP_PROJECT_ID }}/${{ env.IMAGE_NAME }}:${{ github.sha }} \
             --platform managed \
             --region asia-south1 \
             --allow-unauthenticated \

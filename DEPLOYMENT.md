@@ -1,253 +1,402 @@
 # FinSight Deployment Guide
 
-This guide covers deploying FinSight to Google Cloud Platform (GCP) using Docker and GitHub Actions.
+This guide covers deploying FinSight to **Google Cloud Platform (GCP)** with **Firebase Hosting** for the frontend.
 
-## 🚀 Quick Start
+## 🏗️ Architecture Overview
 
-### 1. Prerequisites
+- **Frontend**: React app deployed to **Firebase Hosting**
+- **Backend**: FastAPI app deployed to **Google Cloud Run**
+- **Database**: PostgreSQL on **Cloud SQL**
+- **Secrets**: Managed by **Google Secret Manager**
+- **CI/CD**: Automated deployment via **GitHub Actions**
+
+## 📋 Prerequisites
+
+### Required Tools
+- [Google Cloud CLI](https://cloud.google.com/sdk/docs/install)
+- [Firebase CLI](https://firebase.google.com/docs/cli#install-cli)
+- [Docker](https://docs.docker.com/get-docker/)
+- [Node.js 18+](https://nodejs.org/)
+- [Python 3.11+](https://www.python.org/)
+
+### Required Accounts
 - Google Cloud Platform account
-- Google Cloud CLI (`gcloud`) installed and authenticated
-- GitHub repository with your code
-- Domain name (optional, for custom URLs)
+- Firebase project
+- GitHub account
 
-### 2. One-Click Deployment
+## 🚀 Quick Deployment
+
+### Option 1: Automated Script
 ```bash
 # Make script executable
 chmod +x scripts/deploy.sh
+
+# Set environment variables
+export GCP_PROJECT_ID="your-gcp-project-id"
+export FIREBASE_PROJECT_ID="your-firebase-project-id"
+export GCP_REGION="us-central1"
 
 # Run deployment
 ./scripts/deploy.sh
 ```
 
+### Option 2: Manual Step-by-Step
+Follow the detailed steps below.
+
 ## 🔧 Manual Setup
 
-### 1. Enable GCP APIs
+### 1. Google Cloud Platform Setup
+
+#### Create Project
 ```bash
-gcloud services enable cloudbuild.googleapis.com
+# Create new project
+gcloud projects create finsight-app --name="FinSight Financial App"
+
+# Set as default
+gcloud config set project finsight-app
+
+# Get project ID
+PROJECT_ID=$(gcloud config get-value project)
+echo "Project ID: $PROJECT_ID"
+```
+
+#### Enable Required APIs
+```bash
+# Enable necessary APIs
 gcloud services enable run.googleapis.com
+gcloud services enable sql-component.googleapis.com
 gcloud services enable sqladmin.googleapis.com
 gcloud services enable secretmanager.googleapis.com
+gcloud services enable cloudbuild.googleapis.com
+gcloud services enable containerregistry.googleapis.com
 ```
 
-### 2. Create Secrets in Secret Manager
-```bash
-# Create secrets
-gcloud secrets create GOOGLE_CLIENT_ID --data-file=- <<< "your-client-id"
-gcloud secrets create GOOGLE_CLIENT_SECRET --data-file=- <<< "your-client-secret"
-gcloud secrets create OPENAI_API_KEY --data-file=- <<< "your-openai-key"
-gcloud secrets create DATABASE_URL --data-file=- <<< "postgresql://user:pass@host:5432/db"
-gcloud secrets create JWT_SECRET --data-file=- <<< "your-jwt-secret"
-
-# Grant access to Cloud Run service account
-gcloud secrets add-iam-policy-binding GOOGLE_CLIENT_ID \
-    --member="serviceAccount:YOUR_SERVICE_ACCOUNT@YOUR_PROJECT.iam.gserviceaccount.com" \
-    --role="roles/secretmanager.secretAccessor"
-```
-
-### 3. Deploy Backend
-```bash
-cd backend
-gcloud builds submit --tag gcr.io/YOUR_PROJECT_ID/finsight-backend:latest .
-gcloud run deploy finsight-backend \
-    --image gcr.io/YOUR_PROJECT_ID/finsight-backend:latest \
-    --platform managed \
-    --region us-central1 \
-    --allow-unauthenticated \
-    --port 8000 \
-    --memory 1Gi \
-    --cpu 1
-```
-
-### 4. Deploy Frontend
-```bash
-cd frontend
-gcloud builds submit --tag gcr.io/YOUR_PROJECT_ID/finsight-frontend:latest .
-gcloud run deploy finsight-frontend \
-    --image gcr.io/YOUR_PROJECT_ID/finsight-frontend:latest \
-    --platform managed \
-    --region us-central1 \
-    --allow-unauthenticated \
-    --port 80 \
-    --memory 512Mi \
-    --cpu 1
-```
-
-## 🔐 GitHub Actions Setup
-
-### 1. Repository Secrets
-Add these secrets in your GitHub repository (Settings → Secrets and variables → Actions):
-
-- `GCP_SA_KEY`: Your service account JSON key
-- `GCP_PROJECT_ID`: Your GCP project ID
-- `DATABASE_URL`: PostgreSQL connection string
-- `JWT_SECRET`: JWT signing secret
-- `GOOGLE_CLIENT_ID`: Google OAuth client ID
-- `GOOGLE_CLIENT_SECRET`: Google OAuth client secret
-- `OPENAI_API_KEY`: OpenAI API key
-- `DB_ROOT_PASSWORD`: Database root password
-- `DB_PASSWORD`: Database user password
-
-### 2. Service Account Setup
+#### Create Service Account
 ```bash
 # Create service account
-gcloud iam service-accounts create github-actions \
-    --description="Service account for GitHub Actions" \
-    --display-name="GitHub Actions"
+gcloud iam service-accounts create finsight-deployer \
+    --display-name="FinSight Deployment Service Account"
 
 # Grant necessary roles
-gcloud projects add-iam-policy-binding YOUR_PROJECT_ID \
-    --member="serviceAccount:github-actions@YOUR_PROJECT_ID.iam.gserviceaccount.com" \
+gcloud projects add-iam-policy-binding $PROJECT_ID \
+    --member="serviceAccount:finsight-deployer@$PROJECT_ID.iam.gserviceaccount.com" \
     --role="roles/run.admin"
 
-gcloud projects add-iam-policy-binding YOUR_PROJECT_ID \
-    --member="serviceAccount:github-actions@YOUR_PROJECT_ID.iam.gserviceaccount.com" \
-    --role="roles/storage.admin"
+gcloud projects add-iam-policy-binding $PROJECT_ID \
+    --member="serviceAccount:finsight-deployer@$PROJECT_ID.iam.gserviceaccount.com" \
+    --role="roles/sql.admin"
 
-gcloud projects add-iam-policy-binding YOUR_PROJECT_ID \
-    --member="serviceAccount:github-actions@YOUR_PROJECT_ID.iam.gserviceaccount.com" \
-    --role="roles/secretmanager.secretAccessor"
+gcloud projects add-iam-policy-binding $PROJECT_ID \
+    --member="serviceAccount:finsight-deployer@$PROJECT_ID.iam.gserviceaccount.com" \
+    --role="roles/secretmanager.admin"
 
 # Create and download key
 gcloud iam service-accounts keys create key.json \
-    --iam-account=github-actions@YOUR_PROJECT_ID.iam.gserviceaccount.com
+    --iam-account=finsight-deployer@$PROJECT_ID.iam.gserviceaccount.com
 ```
 
-## 🌐 Custom Domain Setup
+### 2. Firebase Setup
 
-### 1. Map Domain to Cloud Run
+#### Install Firebase CLI
 ```bash
-# Map custom domain
-gcloud run domain-mappings create \
-    --service finsight-frontend \
-    --domain yourdomain.com \
-    --region us-central1
+npm install -g firebase-tools
 ```
 
-### 2. Update DNS
-Add a CNAME record pointing to the Cloud Run URL provided.
+#### Login and Initialize
+```bash
+# Login to Firebase
+firebase login
 
-### 3. Update Google OAuth
-Add your custom domain to Google OAuth authorized origins:
-- `https://yourdomain.com`
-- `https://www.yourdomain.com`
+# Initialize Firebase in frontend directory
+cd frontend
+firebase init hosting
 
-## 🗄️ Database Setup
+# Select your Firebase project
+# Set public directory to: build
+# Configure as single-page app: Yes
+# Don't overwrite index.html: No
+```
 
-### 1. Create Cloud SQL Instance
+#### Update Firebase Configuration
+Edit `frontend/.firebaserc`:
+```json
+{
+  "projects": {
+    "default": "your-firebase-project-id"
+  }
+}
+```
+
+### 3. Database Setup
+
+#### Create Cloud SQL Instance
 ```bash
 gcloud sql instances create finsight-db \
     --database-version=POSTGRES_15 \
     --tier=db-f1-micro \
     --region=us-central1 \
-    --storage-type=HDD \
-    --storage-size=10GB
+    --storage-type=SSD \
+    --storage-size=10GB \
+    --backup-start-time=02:00 \
+    --enable-backup
 ```
 
-### 2. Create Database and User
+#### Create Database and User
 ```bash
+# Create database
 gcloud sql databases create finsight --instance=finsight-db
-gcloud sql users create finsight --instance=finsight-db --password=your-password
+
+# Create user
+gcloud sql users create finsight \
+    --instance=finsight-db \
+    --password="your-secure-password"
 ```
 
-### 3. Get Connection String
+#### Get Connection String
 ```bash
-gcloud sql instances describe finsight-db --region=us-central1
+# Get instance connection name
+INSTANCE_CONNECTION_NAME=$(gcloud sql instances describe finsight-db \
+    --format='value(connectionName)')
+
+echo "Instance connection: $INSTANCE_CONNECTION_NAME"
+echo "Database URL: postgresql://finsight:your-password@/finsight?host=/cloudsql/$INSTANCE_CONNECTION_NAME"
 ```
 
-## 🔍 Monitoring and Logs
+### 4. Secrets Setup
 
-### 1. View Logs
+#### Store Secrets in Secret Manager
 ```bash
-# Backend logs
-gcloud logging read "resource.type=cloud_run_revision AND resource.labels.service_name=finsight-backend"
+# JWT Secret
+echo "your-super-secure-jwt-secret" | \
+gcloud secrets create JWT_SECRET --data-file=-
 
-# Frontend logs
-gcloud logging read "resource.type=cloud_run_revision AND resource.labels.service_name=finsight-frontend"
+# Google OAuth
+echo "your-google-client-id" | \
+gcloud secrets create GOOGLE_CLIENT_ID --data-file=-
+
+echo "your-google-client-secret" | \
+gcloud secrets create GOOGLE_CLIENT_SECRET --data-file=-
+
+# API Keys
+echo "your-openai-api-key" | \
+gcloud secrets create OPENAI_API_KEY --data-file=-
+
+echo "your-gemini-api-key" | \
+gcloud secrets create GEMINI_API_KEY --data-file=-
 ```
 
-### 2. Monitor Performance
-- Go to GCP Console → Cloud Run
-- Select your service
-- View metrics and logs
+## 🚀 Deployment
 
-## 🚨 Troubleshooting
+### Deploy Backend to Cloud Run
+
+#### Build and Push Docker Image
+```bash
+cd backend
+
+# Build image
+docker build -t gcr.io/$PROJECT_ID/finsight-backend:latest .
+
+# Push to Container Registry
+docker push gcr.io/$PROJECT_ID/finsight-backend:latest
+
+cd ..
+```
+
+#### Deploy to Cloud Run
+```bash
+gcloud run deploy finsight-backend \
+    --image gcr.io/$PROJECT_ID/finsight-backend:latest \
+    --platform managed \
+    --region us-central1 \
+    --allow-unauthenticated \
+    --memory 1Gi \
+    --cpu 1 \
+    --max-instances 10 \
+    --set-env-vars="GOOGLE_CLIENT_PROJECT_ID=$PROJECT_ID" \
+    --set-env-vars="DATABASE_URL=postgresql://finsight:password@/finsight?host=/cloudsql/$INSTANCE_CONNECTION_NAME" \
+    --set-env-vars="JWT_SECRET=your-jwt-secret" \
+    --set-env-vars="GOOGLE_CLIENT_ID=your-google-client-id" \
+    --set-env-vars="GOOGLE_CLIENT_SECRET=your-google-client-secret" \
+    --set-env-vars="OPENAI_API_KEY=your-openai-key" \
+    --set-env-vars="GEMINI_API_KEY=your-gemini-key"
+```
+
+#### Get Backend URL
+```bash
+BACKEND_URL=$(gcloud run services describe finsight-backend \
+    --region=us-central1 \
+    --format='value(status.url)')
+echo "Backend URL: $BACKEND_URL"
+```
+
+### Deploy Frontend to Firebase
+
+#### Build React App
+```bash
+cd frontend
+
+# Install dependencies
+npm ci
+
+# Build for production
+REACT_APP_API_URL=$BACKEND_URL npm run build
+
+cd ..
+```
+
+#### Deploy to Firebase
+```bash
+cd frontend
+firebase deploy --project your-firebase-project-id --only hosting
+cd ..
+```
+
+## 🔄 CI/CD with GitHub Actions
+
+### 1. Repository Secrets
+
+Add these secrets to your GitHub repository:
+
+- `GCP_SA_KEY`: Content of your service account key file
+- `GCP_PROJECT_ID`: Your GCP project ID
+- `FIREBASE_SERVICE_ACCOUNT`: Firebase service account JSON
+- `FIREBASE_PROJECT_ID`: Your Firebase project ID
+- `DATABASE_URL`: Your database connection string
+- `JWT_SECRET`: Your JWT secret
+- `GOOGLE_CLIENT_ID`: Google OAuth client ID
+- `GOOGLE_CLIENT_SECRET`: Google OAuth client secret
+- `OPENAI_API_KEY`: OpenAI API key
+- `GEMINI_API_KEY`: Gemini API key
+- `DB_ROOT_PASSWORD`: Database root password
+- `DB_PASSWORD`: Database user password
+
+### 2. Firebase Service Account
+
+Create a Firebase service account:
+1. Go to Firebase Console → Project Settings → Service Accounts
+2. Click "Generate new private key"
+3. Save the JSON file content as `FIREBASE_SERVICE_ACCOUNT` secret
+
+### 3. Push to Main Branch
+
+The GitHub Actions workflow will automatically:
+1. Run tests
+2. Deploy backend to Cloud Run
+3. Deploy frontend to Firebase Hosting
+4. Set up database infrastructure
+
+## 🌐 Custom Domain Setup
+
+### Firebase Hosting Domain
+1. Go to Firebase Console → Hosting
+2. Click "Add custom domain"
+3. Enter your domain
+4. Follow DNS verification steps
+
+### SSL Certificate
+Firebase automatically provides SSL certificates for custom domains.
+
+## 📊 Monitoring and Logging
+
+### Cloud Run Logs
+```bash
+gcloud logs read "resource.type=cloud_run_revision AND resource.labels.service_name=finsight-backend" --limit=50
+```
+
+### Firebase Analytics
+- View in Firebase Console → Analytics
+- Track user engagement and performance
+
+### Cloud SQL Monitoring
+- Monitor in Cloud Console → SQL
+- Set up alerts for disk usage and connections
+
+## 🔧 Troubleshooting
 
 ### Common Issues
 
-1. **CORS Errors**
-   - Check CORS configuration in `backend/main.py`
-   - Verify origins include your domain
-
-2. **Database Connection Issues**
-   - Check `DATABASE_URL` format
-   - Verify Cloud SQL instance is running
-   - Check firewall rules
-
-3. **Authentication Errors**
-   - Verify Google OAuth credentials
-   - Check authorized origins in Google Console
-   - Verify JWT secret is set
-
-4. **Build Failures**
-   - Check Dockerfile syntax
-   - Verify all dependencies in requirements.txt
-   - Check build logs in Cloud Build
-
-### Debug Commands
+#### Backend Deployment Fails
 ```bash
-# Test backend health
-curl https://your-backend-url/health
+# Check logs
+gcloud logs read "resource.type=cloud_run_revision AND resource.labels.service_name=finsight-backend" --limit=20
 
-# Test database connection
-gcloud sql connect finsight-db --user=finsight
-
-# Check service status
+# Verify environment variables
 gcloud run services describe finsight-backend --region=us-central1
 ```
 
-## 📊 Cost Optimization
+#### Frontend Build Fails
+```bash
+# Check Node.js version
+node --version
 
-### 1. Resource Sizing
-- Backend: 1Gi RAM, 1 CPU (adjust based on load)
-- Frontend: 512Mi RAM, 1 CPU (sufficient for static content)
-- Database: db-f1-micro (free tier)
+# Clear npm cache
+npm cache clean --force
 
-### 2. Scaling
-- Set appropriate `--max-instances` to control costs
-- Use `--min-instances=0` for services that can scale to zero
+# Reinstall dependencies
+rm -rf node_modules package-lock.json
+npm install
+```
 
-### 3. Monitoring
-- Set up billing alerts
-- Monitor resource usage in GCP Console
+#### Database Connection Issues
+```bash
+# Test connection
+gcloud sql connect finsight-db --user=finsight
+
+# Check instance status
+gcloud sql instances describe finsight-db
+```
+
+## 💰 Cost Optimization
+
+### Free Tier Benefits
+- **Cloud Run**: 2 million requests/month free
+- **Cloud SQL**: db-f1-micro instance (shared core)
+- **Firebase Hosting**: 10GB storage, 360MB/day transfer
+
+### Cost Monitoring
+```bash
+# Set up billing alerts
+gcloud billing budgets create --billing-account=YOUR_BILLING_ACCOUNT_ID \
+    --budget-amount=50USD \
+    --budget-filter-projects=$PROJECT_ID
+```
 
 ## 🔄 Updates and Rollbacks
 
-### 1. Deploy New Version
+### Update Application
 ```bash
-# Build and deploy
-gcloud builds submit --tag gcr.io/YOUR_PROJECT_ID/finsight-backend:v2 .
-gcloud run deploy finsight-backend \
-    --image gcr.io/YOUR_PROJECT_ID/finsight-backend:v2
+# Push to main branch - automatic deployment
+git push origin main
 ```
 
-### 2. Rollback
+### Rollback Backend
 ```bash
-# Deploy previous version
-gcloud run deploy finsight-backend \
-    --image gcr.io/YOUR_PROJECT_ID/finsight-backend:v1
+# List revisions
+gcloud run revisions list --service=finsight-backend --region=us-central1
+
+# Rollback to specific revision
+gcloud run services update-traffic finsight-backend \
+    --to-revisions=REVISION_NAME=100 \
+    --region=us-central1
+```
+
+### Rollback Frontend
+```bash
+# Firebase automatically handles rollbacks
+# Previous versions are available in Firebase Console
 ```
 
 ## 📚 Additional Resources
 
 - [Cloud Run Documentation](https://cloud.google.com/run/docs)
+- [Firebase Hosting Documentation](https://firebase.google.com/docs/hosting)
 - [Cloud SQL Documentation](https://cloud.google.com/sql/docs)
 - [Secret Manager Documentation](https://cloud.google.com/secret-manager/docs)
-- [GitHub Actions Documentation](https://docs.github.com/en/actions)
 
 ## 🆘 Support
 
-For issues specific to this deployment:
+For issues:
 1. Check the troubleshooting section above
-2. Review GCP Console logs
-3. Check GitHub Actions workflow runs
-4. Verify all environment variables are set correctly 
+2. Review Cloud Console logs
+3. Check Firebase Console for frontend issues
+4. Open GitHub issues for code-related problems 

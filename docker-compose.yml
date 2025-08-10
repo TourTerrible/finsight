@@ -19,19 +19,16 @@ services:
     networks:
       - finsight-network
 
-  frontend:
+  frontend-build:
     build: ./frontend
-    ports:
-      - "3000:80"
-    depends_on:
-      - backend
-    environment:
-      - REACT_APP_API_URL=http://localhost:8000
+    volumes:
+      - ./frontend/build:/app/build
+    command: echo "Frontend built for Firebase hosting"
     networks:
       - finsight-network
 
   postgres:
-    image: postgres:15-alpine
+    image: postgres:15
     environment:
       - POSTGRES_DB=finsight
       - POSTGRES_USER=finsight

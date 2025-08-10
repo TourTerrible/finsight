@@ -1,4 +1,4 @@
-# Build stage
+# Build stage for Firebase hosting
 FROM node:18-alpine AS build
 
 WORKDIR /app
@@ -12,20 +12,8 @@ RUN npm ci --only=production
 # Copy source code
 COPY . .
 
-# Build the app
+# Build the app for Firebase hosting
 RUN npm run build
 
-# Production stage
-FROM nginx:alpine
-
-# Copy built app from build stage
-COPY --from=build /app/build /usr/share/nginx/html
-
-# Copy nginx configuration
-COPY nginx.conf /etc/nginx/nginx.conf
-
-# Expose port
-EXPOSE 80
-
-# Start nginx
-CMD ["nginx", "-g", "daemon off;"] 
+# The build output will be in /app/build directory
+# This can be deployed to Firebase hosting using firebase deploy 

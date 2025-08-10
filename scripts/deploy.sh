@@ -1,6 +1,8 @@
 #!/bin/bash
 
-# FinSight Deployment Script
+# FinSight Deployment Script for GCP + Firebase
+# This script deploys the backend to Cloud Run and frontend to Firebase Hosting
+
 set -e
 
 # Colors for output
@@ -10,98 +12,172 @@ YELLOW='\033[1;33m'
 NC='\033[0m' # No Color
 
 # Configuration
-PROJECT_ID=${GOOGLE_CLIENT_PROJECT_ID:-"your-project-id"}
+PROJECT_ID=${GCP_PROJECT_ID:-"your-gcp-project-id"}
 REGION=${GCP_REGION:-"us-central1"}
-BACKEND_SERVICE="finsight-backend"
-FRONTEND_SERVICE="finsight-frontend"
+FIREBASE_PROJECT_ID=${FIREBASE_PROJECT_ID:-"your-firebase-project-id"}
 
-echo -e "${GREEN}🚀 Starting FinSight deployment to GCP...${NC}"
+echo -e "${GREEN}🚀 Starting FinSight deployment...${NC}"
 
-# Check if gcloud is installed
-if ! command -v gcloud &> /dev/null; then
-    echo -e "${RED}❌ gcloud CLI is not installed. Please install it first.${NC}"
-    exit 1
-fi
+# Check if required tools are installed
+check_requirements() {
+    echo -e "${YELLOW}📋 Checking requirements...${NC}"
+    
+    if ! command -v gcloud &> /dev/null; then
+        echo -e "${RED}❌ Google Cloud CLI (gcloud) is not installed${NC}"
+        echo "Install from: https://cloud.google.com/sdk/docs/install"
+        exit 1
+    fi
+    
+    if ! command -v firebase &> /dev/null; then
+        echo -e "${RED}❌ Firebase CLI is not installed${NC}"
+        echo "Install with: npm install -g firebase-tools"
+        exit 1
+    fi
+    
+    if ! command -v docker &> /dev/null; then
+        echo -e "${RED}❌ Docker is not installed${NC}"
+        echo "Install from: https://docs.docker.com/get-docker/"
+        exit 1
+    fi
+    
+    echo -e "${GREEN}✅ All requirements met${NC}"
+}
 
-# Check if user is authenticated
-if ! gcloud auth list --filter=status:ACTIVE --format="value(account)" | grep -q .; then
-    echo -e "${YELLOW}⚠️  Not authenticated with gcloud. Please run 'gcloud auth login' first.${NC}"
-    exit 1
-fi
-
-# Set project
-echo -e "${YELLOW}📋 Setting project to: $PROJECT_ID${NC}"
-gcloud config set project $PROJECT_ID
+# Authenticate with Google Cloud
+authenticate_gcp() {
+    echo -e "${YELLOW}🔐 Authenticating with Google Cloud...${NC}"
+    
+    # Check if already authenticated
+    if gcloud auth list --filter=status:ACTIVE --format="value(account)" | grep -q .; then
+        echo -e "${GREEN}✅ Already authenticated with Google Cloud${NC}"
+    else
+        gcloud auth login
+    fi
+    
+    # Set project
+    gcloud config set project $PROJECT_ID
+    echo -e "${GREEN}✅ Project set to: $PROJECT_ID${NC}"
+}
 
 # Enable required APIs
-echo -e "${YELLOW}🔧 Enabling required APIs...${NC}"
-gcloud services enable cloudbuild.googleapis.com
-gcloud services enable run.googleapis.com
-gcloud services enable sqladmin.googleapis.com
-gcloud services enable secretmanager.googleapis.com
+enable_apis() {
+    echo -e "${YELLOW}🔌 Enabling required APIs...${NC}"
+    
+    APIs=(
+        "run.googleapis.com"
+        "sql-component.googleapis.com"
+        "sqladmin.googleapis.com"
+        "secretmanager.googleapis.com"
+        "cloudbuild.googleapis.com"
+        "containerregistry.googleapis.com"
+    )
+    
+    for api in "${APIs[@]}"; do
+        echo "Enabling $api..."
+        gcloud services enable $api --quiet
+    done
+    
+    echo -e "${GREEN}✅ All APIs enabled${NC}"
+}
 
-# Build and deploy backend
-echo -e "${YELLOW}🏗️  Building and deploying backend...${NC}"
-cd backend
-gcloud builds submit --tag gcr.io/$PROJECT_ID/$BACKEND_SERVICE:latest .
-gcloud run deploy $BACKEND_SERVICE \
-    --image gcr.io/$PROJECT_ID/$BACKEND_SERVICE:latest \
-    --platform managed \
-    --region $REGION \
-    --allow-unauthenticated \
-    --port 8000 \
-    --memory 1Gi \
-    --cpu 1 \
-    --max-instances 10
+# Deploy backend to Cloud Run
+deploy_backend() {
+    echo -e "${YELLOW}🚀 Deploying backend to Cloud Run...${NC}"
+    
+    # Build and push Docker image
+    echo "Building backend Docker image..."
+    cd backend
+    docker build -t gcr.io/$PROJECT_ID/finsight-backend:latest .
+    
+    echo "Pushing to Google Container Registry..."
+    docker push gcr.io/$PROJECT_ID/finsight-backend:latest
+    
+    # Deploy to Cloud Run
+    echo "Deploying to Cloud Run..."
+    gcloud run deploy finsight-backend \
+        --image gcr.io/$PROJECT_ID/finsight-backend:latest \
+        --platform managed \
+        --region $REGION \
+        --allow-unauthenticated \
+        --memory 1Gi \
+        --cpu 1 \
+        --max-instances 10 \
+        --set-env-vars="GOOGLE_CLIENT_PROJECT_ID=$PROJECT_ID"
+    
+    cd ..
+    
+    # Get backend URL
+    BACKEND_URL=$(gcloud run services describe finsight-backend --region=$REGION --format='value(status.url)')
+    echo -e "${GREEN}✅ Backend deployed to: $BACKEND_URL${NC}"
+}
 
-# Get backend URL
-BACKEND_URL=$(gcloud run services describe $BACKEND_SERVICE --region=$REGION --format='value(status.url)')
-echo -e "${GREEN}✅ Backend deployed to: $BACKEND_URL${NC}"
+# Deploy frontend to Firebase
+deploy_frontend() {
+    echo -e "${YELLOW}🌐 Deploying frontend to Firebase Hosting...${NC}"
+    
+    cd frontend
+    
+    # Build the React app
+    echo "Building React app..."
+    npm run build
+    
+    # Deploy to Firebase
+    echo "Deploying to Firebase..."
+    firebase deploy --project $FIREBASE_PROJECT_ID --only hosting
+    
+    cd ..
+    
+    echo -e "${GREEN}✅ Frontend deployed to Firebase Hosting${NC}"
+}
 
-# Build and deploy frontend
-echo -e "${YELLOW}🏗️  Building and deploying frontend...${NC}"
-cd ../frontend
-gcloud builds submit --tag gcr.io/$PROJECT_ID/$FRONTEND_SERVICE:latest .
-gcloud run deploy $FRONTEND_SERVICE \
-    --image gcr.io/$PROJECT_ID/$FRONTEND_SERVICE:latest \
-    --platform managed \
-    --region $REGION \
-    --allow-unauthenticated \
-    --port 80 \
-    --memory 512Mi \
-    --cpu 1 \
-    --max-instances 5 \
-    --set-env-vars="REACT_APP_API_URL=$BACKEND_URL"
-
-# Get frontend URL
-FRONTEND_URL=$(gcloud run services describe $FRONTEND_SERVICE --region=$REGION --format='value(status.url)')
-echo -e "${GREEN}✅ Frontend deployed to: $FRONTEND_URL${NC}"
-
-# Create database if it doesn't exist
-echo -e "${YELLOW}🗄️  Setting up database...${NC}"
-if ! gcloud sql instances describe finsight-db --region=$REGION &> /dev/null; then
-    echo -e "${YELLOW}📊 Creating Cloud SQL instance...${NC}"
+# Setup Cloud SQL database
+setup_database() {
+    echo -e "${YELLOW}🗄️ Setting up Cloud SQL database...${NC}"
+    
+    # Create Cloud SQL instance
+    echo "Creating Cloud SQL instance..."
     gcloud sql instances create finsight-db \
         --database-version=POSTGRES_15 \
         --tier=db-f1-micro \
         --region=$REGION \
-        --storage-type=HDD \
+        --storage-type=SSD \
         --storage-size=10GB \
         --backup-start-time=02:00 \
-        --maintenance-window-day=SUN \
-        --maintenance-window-hour=02
-else
-    echo -e "${GREEN}✅ Database instance already exists${NC}"
-fi
+        --enable-backup \
+        --quiet || echo "Instance already exists"
+    
+    # Create database
+    echo "Creating database..."
+    gcloud sql databases create finsight \
+        --instance=finsight-db \
+        --quiet || echo "Database already exists"
+    
+    # Create user
+    echo "Creating database user..."
+    gcloud sql users create finsight \
+        --instance=finsight-db \
+        --password="your-secure-password" \
+        --quiet || echo "User already exists"
+    
+    echo -e "${GREEN}✅ Database setup complete${NC}"
+}
 
-# Create database and user
-gcloud sql databases create finsight --instance=finsight-db --quiet || echo "Database already exists"
-gcloud sql users create finsight --instance=finsight-db --password=temp-password --quiet || echo "User already exists"
+# Main deployment flow
+main() {
+    check_requirements
+    authenticate_gcp
+    enable_apis
+    deploy_backend
+    deploy_frontend
+    setup_database
+    
+    echo -e "${GREEN}🎉 Deployment complete!${NC}"
+    echo -e "${YELLOW}📝 Next steps:${NC}"
+    echo "1. Update your .env file with the backend URL: $BACKEND_URL"
+    echo "2. Configure Firebase project ID in frontend/.firebaserc"
+    echo "3. Set up GitHub repository secrets for CI/CD"
+    echo "4. Test your application"
+}
 
-echo -e "${GREEN}🎉 Deployment completed successfully!${NC}"
-echo -e "${GREEN}🌐 Frontend: $FRONTEND_URL${NC}"
-echo -e "${GREEN}🔧 Backend: $BACKEND_URL${NC}"
-echo -e "${YELLOW}⚠️  Remember to:${NC}"
-echo -e "${YELLOW}   1. Update your Google OAuth authorized origins${NC}"
-echo -e "${YELLOW}   2. Set up secrets in Secret Manager${NC}"
-echo -e "${YELLOW}   3. Configure your custom domain (if desired)${NC}" 
+# Run main function
+main "$@" 

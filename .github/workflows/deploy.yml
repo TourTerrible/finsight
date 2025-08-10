@@ -98,14 +98,14 @@ jobs:
           context: ./backend
           platforms: linux/amd64
           push: true
-          tags: ${{ env.GCP_REGION }}-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/finsight-repo/finsight-backend:${{ github.sha }}
+          tags: asia-south1-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/finsight-repo/finsight-backend:${{ github.sha }}
       
       - name: Deploy backend to Cloud Run
         run: |
           gcloud run deploy finsight-backend \
-            --image ${{ env.GCP_REGION }}-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/finsight-repo/finsight-backend:${{ github.sha }} \
+            --image asia-south1-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/finsight-repo/finsight-backend:${{ github.sha }} \
             --platform managed \
-            --region ${{ env.GCP_REGION }} \
+            --region asia-south1 \
             --allow-unauthenticated \
             --set-env-vars="DATABASE_URL=${{ secrets.DATABASE_URL }}" \
             --set-env-vars="JWT_SECRET=${{ secrets.JWT_SECRET }}" \
@@ -114,7 +114,7 @@ jobs:
             --set-env-vars="OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }}" \
             --set-env-vars="GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }}" \
             --set-env-vars="GOOGLE_CLIENT_PROJECT_ID=${{ secrets.GCP_PROJECT_ID }}" \
-            --set-env-vars="GCP_REGION=${{ env.GCP_REGION }}"
+            --set-env-vars="GCP_REGION=asia-south1"
 
   deploy-frontend:
     needs: test

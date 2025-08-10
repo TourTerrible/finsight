@@ -93,7 +93,7 @@ jobs:
         run: |
           docker buildx create --use --name finsight-builder || true
           docker buildx build --platform linux/amd64 \
-            -t ${{ env.GCP_REGION }}-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/finsight-repo/finsight-backend:${{ github.sha }} \
+            -t asia-south1-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/finsight-repo/finsight-backend:${{ github.sha }} \
             --push \
             ./backend
       

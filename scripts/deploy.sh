@@ -69,7 +69,7 @@ enable_apis() {
         "sqladmin.googleapis.com"
         "secretmanager.googleapis.com"
         "cloudbuild.googleapis.com"
-        "containerregistry.googleapis.com"
+        "artifactregistry.googleapis.com"
     )
     
     for api in "${APIs[@]}"; do
@@ -80,6 +80,25 @@ enable_apis() {
     echo -e "${GREEN}✅ All APIs enabled${NC}"
 }
 
+# Setup Artifact Registry
+setup_artifact_registry() {
+    echo -e "${YELLOW}📦 Setting up Artifact Registry...${NC}"
+    
+    # Create repository if it doesn't exist
+    echo "Creating Artifact Registry repository..."
+    gcloud artifacts repositories create finsight-repo \
+        --repository-format=docker \
+        --location=$REGION \
+        --description="FinSight Docker repository" \
+        --quiet || echo "Repository already exists"
+    
+    # Configure Docker authentication
+    echo "Configuring Docker authentication..."
+    gcloud auth configure-docker $REGION-docker.pkg.dev --quiet
+    
+    echo -e "${GREEN}✅ Artifact Registry setup complete${NC}"
+}
+
 # Deploy backend to Cloud Run
 deploy_backend() {
     echo -e "${YELLOW}🚀 Deploying backend to Cloud Run...${NC}"
@@ -87,15 +106,15 @@ deploy_backend() {
     # Build and push Docker image
     echo "Building backend Docker image..."
     cd backend
-    docker build -t gcr.io/$PROJECT_ID/finsight-backend:latest .
+    docker build -t $REGION-docker.pkg.dev/$PROJECT_ID/finsight-repo/finsight-backend:latest .
     
-    echo "Pushing to Google Container Registry..."
-    docker push gcr.io/$PROJECT_ID/finsight-backend:latest
+    echo "Pushing to Artifact Registry..."
+    docker push $REGION-docker.pkg.dev/$PROJECT_ID/finsight-repo/finsight-backend:latest
     
     # Deploy to Cloud Run
     echo "Deploying to Cloud Run..."
     gcloud run deploy finsight-backend \
-        --image gcr.io/$PROJECT_ID/finsight-backend:latest \
+        --image $REGION-docker.pkg.dev/$PROJECT_ID/finsight-repo/finsight-backend:latest \
         --platform managed \
         --region $REGION \
         --allow-unauthenticated \
@@ -167,6 +186,7 @@ main() {
     check_requirements
     authenticate_gcp
     enable_apis
+    setup_artifact_registry
     deploy_backend
     deploy_frontend
     setup_database

@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { JourneySummary, UserStats } from '../types/financial.ts';
 import { useAuth } from '../contexts/AuthContext.tsx';
-import API_ENDPOINTS from '../config/api';
+import API_ENDPOINTS from '../config/api.tsx';
 
 interface JourneyHistoryProps {
   userEmail: string;

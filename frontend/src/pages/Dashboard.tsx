@@ -8,7 +8,7 @@ import PDFExport from '../components/PDFExport.tsx';
 import RunAnalysisModal from '../components/RunAnalysisModal.tsx';
 import { UserFinancialData, SimulationResult, AIAdviceResponse } from '../types/financial.ts';
 import { useAuth } from '../contexts/AuthContext.tsx';
-import API_ENDPOINTS from '../config/api';
+import API_ENDPOINTS from '../config/api.tsx';
 
 interface JourneyDetail {
   id: number;

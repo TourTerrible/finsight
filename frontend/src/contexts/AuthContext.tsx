@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import API_ENDPOINTS from '../config/api';
+import API_ENDPOINTS from '../config/api.tsx';
 
 export interface User {
   id: number;

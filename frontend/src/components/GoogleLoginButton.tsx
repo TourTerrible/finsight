@@ -1,6 +1,6 @@
 import React, { useEffect, useCallback } from 'react';
 import { useAuth } from '../contexts/AuthContext.tsx';
-import API_ENDPOINTS from '../config/api';
+import API_ENDPOINTS from '../config/api.tsx';
 // Allow referencing process.env in CRA TypeScript without Node types
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 declare const process: any;

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { SimulationResult, AIAdviceResponse, UserFinancialData } from '../types/financial.ts';
-import API_ENDPOINTS from '../config/api';
+import API_ENDPOINTS from '../config/api.tsx';
 
 interface AIAdviceProps {
   simulationResult: SimulationResult;

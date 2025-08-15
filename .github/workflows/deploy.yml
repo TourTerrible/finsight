@@ -8,44 +8,35 @@ on:
 
 env:
   GCP_REGION: asia-south1
-  PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
 
 jobs:
   test:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      
+
       - name: Set up Node.js
         uses: actions/setup-node@v3
         with:
           node-version: '18'
           cache: 'npm'
           cache-dependency-path: frontend/package-lock.json
-      
-      - name: Install frontend dependencies
+
+      - name: Frontend deps (skip tests)
         run: |
           cd frontend
           npm ci
-      
-      - name: Skip frontend tests
-        run: |
-          cd frontend
           echo "✅ Skipping frontend tests"
-      
+
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
           python-version: '3.11'
-      
-      - name: Install backend dependencies
+
+      - name: Backend deps (skip tests)
         run: |
           cd backend
           pip install -r requirements.txt
-      
-      - name: Skip backend tests
-        run: |
-          cd backend
           echo "✅ Skipping backend tests"
 
   deploy-backend:
@@ -53,33 +44,25 @@ jobs:
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main'
     permissions:
-      id-token: write   # required for OIDC
+      id-token: write
       contents: read
+    outputs:
+      backend_url: ${{ steps.geturl.outputs.url }}
     steps:
       - uses: actions/checkout@v4
-      
-      # Authenticate to GCP via Workload Identity Federation
+
+      # OIDC auth
       - name: Auth to Google Cloud
         uses: google-github-actions/auth@v2
         with:
           workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
           service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
           project_id: ${{ secrets.GCP_PROJECT_ID }}
-      
-
-      - name: Who am I on GCP?
-        run: |
-          gcloud auth list
-          gcloud config list
 
       - name: Setup gcloud
         uses: google-github-actions/setup-gcloud@v2
-        with:
-          version: ">= 471.0.0"
-      
-      # - name: Configure Docker for GCR
-      #   run: gcloud auth configure-docker
 
+      # Ensure AR repo exists, then configure Docker only for AR
       - name: Setup Artifact Registry
         run: |
           gcloud artifacts repositories create finsight-repo \
@@ -88,37 +71,34 @@ jobs:
             --description="FinSight Docker repository" \
             --quiet || echo "Repository already exists"
           gcloud auth configure-docker ${{ env.GCP_REGION }}-docker.pkg.dev --quiet
-      
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-      
-      - name: Login to Artifact Registry
+
+      - uses: docker/setup-buildx-action@v3
+
+      # Compose a single, correct tag (prevents newline/splitting bugs)
+      - name: Compose image tag
         run: |
-          gcloud auth configure-docker asia-south1-docker.pkg.dev --quiet
-      
+          IMAGE="${{ env.GCP_REGION }}-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/finsight-repo/finsight-backend:${{ github.sha }}"
+          echo "IMAGE=$IMAGE" >> $GITHUB_ENV
+          echo "Using tag: [$IMAGE]"
+
+      # Build & push backend image
       - name: Build and push backend image
-        uses: docker/build-push-action@v5
-        env:
-          REGISTRY: ${{ env.GCP_REGION }}-docker.pkg.dev
-          REPO: finsight-repo
-          IMAGE: finsight-backend
+        uses: docker/build-push-action@v6
         with:
           context: ./backend
           platforms: linux/amd64
           push: true
-          tags: ${{ env.REGISTRY }}/${{ secrets.GCP_PROJECT_ID }} ${{ env.REPO }}/${{ env.IMAGE }}:${{ github.sha }}
-      
+          tags: ${{ env.IMAGE }}
+
+      # Deploy to Cloud Run
       - name: Deploy backend to Cloud Run
-        env:
-          REGISTRY: ${{ env.GCP_REGION }}-docker.pkg.dev
-          REPO: finsight-repo
-          IMAGE: finsight-backend
         run: |
           gcloud run deploy finsight-backend \
-            --image ${{ env.REGISTRY }}/${{ secrets.GCP_PROJECT_ID }}/${{ env.REPO }}/${{ env.IMAGE }}:${{ github.sha }} \
+            --image "${{ env.IMAGE }}" \
             --platform managed \
             --region ${{ env.GCP_REGION }} \
             --allow-unauthenticated \
+            --service-account=run-finsight@${{ secrets.GCP_PROJECT_ID }}.iam.gserviceaccount.com \
             --set-env-vars="DATABASE_URL=${{ secrets.DATABASE_URL }}" \
             --set-env-vars="JWT_SECRET=${{ secrets.JWT_SECRET }}" \
             --set-env-vars="GOOGLE_CLIENT_ID=${{ secrets.GOOGLE_CLIENT_ID }}" \
@@ -126,88 +106,46 @@ jobs:
             --set-env-vars="OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }}" \
             --set-env-vars="GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }}" \
             --set-env-vars="GOOGLE_CLIENT_PROJECT_ID=${{ secrets.GCP_PROJECT_ID }}" \
-            --set-env-vars="GCP_REGION=asia-south1"
+            --set-env-vars="GCP_REGION=${{ env.GCP_REGION }}"
+
+      # Output backend URL for the frontend job
+      - name: Get backend URL
+        id: geturl
+        run: |
+          URL=$(gcloud run services describe finsight-backend --region=${{ env.GCP_REGION }} --format='value(status.url)')
+          echo "url=$URL" >> $GITHUB_OUTPUT
+          echo "Backend URL: $URL"
 
   deploy-frontend:
-    needs: test
+    needs: [test, deploy-backend]
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main'
     steps:
       - uses: actions/checkout@v4
-      
+
       - name: Set up Node.js
         uses: actions/setup-node@v3
         with:
           node-version: '18'
           cache: 'npm'
           cache-dependency-path: frontend/package-lock.json
-      
-      - name: Install dependencies
+
+      - name: Build frontend
+        env:
+          # If Hosting rewrites /api/** to Cloud Run, this can be unused,
+          # but passing it is fine for runtime config if your app reads it.
+          REACT_APP_API_URL: ${{ needs.deploy-backend.outputs.backend_url }}
+          REACT_APP_GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
         run: |
           cd frontend
           npm ci
-      
-      - name: Build frontend
-        run: |
-          cd frontend
           npm run build
-        env:
-          REACT_APP_API_URL: ${{ secrets.BACKEND_URL }}
-          REACT_APP_GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
-      
+
+      # Firebase Hosting deploy (uses your service account JSON secret)
       - name: Deploy to Firebase
         uses: FirebaseExtended/action-hosting-deploy@v0
         with:
-          repoToken: '${{ secrets.GITHUB_TOKEN }}'
-          firebaseServiceAccount: '${{ secrets.FIREBASE_SERVICE_ACCOUNT }}'
+          repoToken: ${{ secrets.GITHUB_TOKEN }}
+          firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
           projectId: ${{ secrets.FIREBASE_PROJECT_ID }}
           channelId: live
-
-  # Database setup skipped - using existing Cloud SQL instance
-  # deploy-database:
-  #   needs: test
-  #   runs-on: ubuntu-latest
-  #   if: github.ref == 'refs/heads/main'
-  #   permissions:
-  #     id-token: write   # required for OIDC
-  #     contents: read
-  #   steps:
-  #     - uses: actions/checkout@v4
-  #     
-  #     # Authenticate to GCP via Workload Identity Federation
-  #     - name: Auth to Google Cloud
-  #       uses: google-github-actions/auth@v2
-  #       with:
-  #         workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
-  #         service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
-  #         project_id: ${{ secrets.GCP_PROJECT_ID }}
-  #     
-  #     - name: Setup gcloud
-  #       uses: google-github-actions/setup-gcloud@v2
-  #       with:
-  #         version: ">= 471.0.0"
-  #     
-  #     - name: Create Cloud SQL instance if not exists
-  #       run: |
-  #         gcloud sql instances create finsight-db \
-  #           --database-version=POSTGRES_15 \
-  #           --tier=db-f1-micro \
-  #           --region=${{ env.GCP_REGION }} \
-  #           --root-password=${{ secrets.DB_ROOT_PASSWORD }} \
-  #           --storage-type=SSD \
-  #           --storage-size=10GB \
-  #           --backup-start-time=02:00 \
-  #           --enable-backup \
-  #           --quiet || echo "Instance already exists"
-  #     
-  #     - name: Create database if not exists
-  #       run: |
-  #         gcloud sql databases create finsight \
-  #           --instance=finsight-db \
-  #           --quiet || echo "Database already exists"
-  #     
-  #     - name: Create user if not exists
-  #       run: |
-  #         gcloud sql users create finsight \
-  #           --password=${{ secrets.DB_PASSWORD }} \
-  #             --quiet || echo "User already exists" 

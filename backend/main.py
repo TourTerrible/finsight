@@ -18,12 +18,23 @@ api_key_test = os.getenv("OPENAI_API_KEY")
 print(f"DEBUG: API key after load_dotenv: {'[REDACTED]' if api_key_test else 'None'}")
 
 from routers import simulate, ai_advice, journey, auth
+from database import create_tables
 
 app = FastAPI(
     title="FinSight API",
     description="AI-Powered Personal Financial Planner",
     version="1.0.0"
 )
+
+@app.on_event("startup")
+async def startup_event():
+    """Initialize database on startup"""
+    try:
+        create_tables()
+        print("Database tables created successfully")
+    except Exception as e:
+        print(f"Warning: Could not create database tables: {e}")
+        # Don't fail startup if database is not available yet
 
 # Configure CORS with production origins
 origins = [

@@ -42,6 +42,9 @@ origins = [
     "http://127.0.0.1:3000",
     "http://localhost:3002",
     "http://127.0.0.1:3002",
+    # Firebase Hosting domains
+    "https://finsight-frontend-e2012.web.app",
+    "https://finsight-frontend-e2012.firebaseapp.com",
     # Add your production domain here
     # "https://yourdomain.com",
     # "https://www.yourdomain.com",

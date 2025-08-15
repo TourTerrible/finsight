@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { SimulationResult, AIAdviceResponse, UserFinancialData } from '../types/financial.ts';
+import API_ENDPOINTS from '../config/api';
 
 interface AIAdviceProps {
   simulationResult: SimulationResult;
@@ -29,7 +30,7 @@ const AIAdvice: React.FC<AIAdviceProps> = ({ simulationResult, userData, journey
     setLoading(true);
     setError(null);
     try {
-      const response = await fetch('/api/v1/advice', {
+      const response = await fetch(API_ENDPOINTS.ADVICE, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

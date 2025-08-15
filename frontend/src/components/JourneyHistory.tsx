@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { JourneySummary, UserStats } from '../types/financial.ts';
 import { useAuth } from '../contexts/AuthContext.tsx';
+import API_ENDPOINTS from '../config/api';
 
 interface JourneyHistoryProps {
   userEmail: string;
@@ -34,10 +35,10 @@ const JourneyHistory: React.FC<JourneyHistoryProps> = ({ userEmail, onLoadJourne
 
       // Fetch user journeys and stats in parallel
       const [journeysResponse, statsResponse] = await Promise.all([
-        fetch(`/api/v1/journey/user/${encodeURIComponent(userEmail)}/journeys`, {
+        fetch(API_ENDPOINTS.JOURNEY_USER_JOURNEYS(userEmail), {
           headers: authHeaders
         }),
-        fetch(`/api/v1/journey/user/${encodeURIComponent(userEmail)}/stats`, {
+                  fetch(API_ENDPOINTS.JOURNEY_USER_STATS(userEmail), {
           headers: authHeaders
         })
       ]);

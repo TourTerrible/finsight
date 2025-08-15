@@ -8,6 +8,7 @@ import PDFExport from '../components/PDFExport.tsx';
 import RunAnalysisModal from '../components/RunAnalysisModal.tsx';
 import { UserFinancialData, SimulationResult, AIAdviceResponse } from '../types/financial.ts';
 import { useAuth } from '../contexts/AuthContext.tsx';
+import API_ENDPOINTS from '../config/api';
 
 interface JourneyDetail {
   id: number;
@@ -63,7 +64,7 @@ const Dashboard: React.FC = () => {
     
     try {
       console.log('Making API request to /api/v1/simulate');
-      const response = await fetch('/api/v1/simulate', {
+      const response = await fetch(API_ENDPOINTS.SIMULATE, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -97,7 +98,7 @@ const Dashboard: React.FC = () => {
   const handleLoadJourney = async (journeyId: number) => {
     if (!user?.email) return;
     try {
-      const response = await fetch(`/api/v1/journey/detail/${journeyId}`, {
+      const response = await fetch(API_ENDPOINTS.JOURNEY_DETAIL(journeyId), {
         headers: {
           'Content-Type': 'application/json',
           ...(token && { 'Authorization': `Bearer ${token}` })

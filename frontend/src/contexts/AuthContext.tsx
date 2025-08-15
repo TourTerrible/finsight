@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import API_ENDPOINTS from '../config/api';
 
 export interface User {
   id: number;
@@ -48,7 +49,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   const fetchUserInfo = async (authToken: string) => {
     try {
-      const response = await fetch('/api/v1/auth/me', {
+      const response = await fetch(API_ENDPOINTS.AUTH_ME, {
         headers: {
           'Authorization': `Bearer ${authToken}`,
           'Content-Type': 'application/json',
@@ -74,7 +75,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   const login = async (credential: string) => {
     try {
-      const response = await fetch('/api/v1/auth/google', {
+      const response = await fetch(API_ENDPOINTS.AUTH_GOOGLE, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

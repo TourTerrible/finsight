@@ -1,5 +1,6 @@
 import React, { useEffect, useCallback } from 'react';
 import { useAuth } from '../contexts/AuthContext.tsx';
+import API_ENDPOINTS from '../config/api';
 // Allow referencing process.env in CRA TypeScript without Node types
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 declare const process: any;
@@ -61,7 +62,7 @@ const GoogleLoginButton: React.FC<GoogleLoginButtonProps> = ({
     if (clientId) {
       bootstrap(clientId);
     } else {
-      fetch('/api/v1/auth/google-client-id')
+      fetch(API_ENDPOINTS.GOOGLE_CLIENT_ID)
         .then(async (res) => {
           if (!res.ok) throw new Error('Failed to load GOOGLE_CLIENT_ID');
           const data = await res.json();

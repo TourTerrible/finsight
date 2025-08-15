@@ -1,5 +1,5 @@
 import React from 'react';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, PieChart, Pie, Cell } from 'recharts';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar } from 'recharts';
 import { SimulationResult, Currency } from '../types/financial.ts';
 
 interface FinancialChartsProps {
@@ -78,7 +78,7 @@ const FinancialCharts: React.FC<FinancialChartsProps> = ({ data, currency = Curr
     { name: 'Monthly Cash Flow', amount: data.monthly_cash_flow },
   ];
 
-  const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444'];
+  // const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444']; // Reserved for future use
 
   return (
     <div className="space-y-6 sm:space-y-8">

@@ -10,7 +10,7 @@ interface RunAnalysisModalProps {
 const RunAnalysisModal: React.FC<RunAnalysisModalProps> = ({ onClose, onProceed, mode }) => {
   const [guestEmail, setGuestEmail] = React.useState('');
   const [loading] = React.useState(false);
-  const [error] = React.useState<string | null>(null);
+  // const [error] = React.useState<string | null>(null); // Reserved for future error handling
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-40">

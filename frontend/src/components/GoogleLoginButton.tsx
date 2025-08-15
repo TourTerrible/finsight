@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useCallback } from 'react';
 import { useAuth } from '../contexts/AuthContext.tsx';
 // Allow referencing process.env in CRA TypeScript without Node types
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -32,21 +32,7 @@ const GoogleLoginButton: React.FC<GoogleLoginButtonProps> = ({
   const { login } = useAuth();
   const buttonRef = React.useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    // Load Google Identity Services script
-    if (!window.google) {
-      const script = document.createElement('script');
-      script.src = 'https://accounts.google.com/gsi/client';
-      script.async = true;
-      script.defer = true;
-      script.onload = initializeGoogleSignIn;
-      document.head.appendChild(script);
-    } else {
-      initializeGoogleSignIn();
-    }
-  }, []);
-
-  const initializeGoogleSignIn = () => {
+  const initializeGoogleSignIn = useCallback(() => {
     if (!buttonRef.current || !window.google) return;
 
     const clientId = process.env.REACT_APP_GOOGLE_CLIENT_ID;
@@ -90,7 +76,21 @@ const GoogleLoginButton: React.FC<GoogleLoginButtonProps> = ({
           }
         });
     }
-  };
+  }, [login, onSuccess, onError]);
+
+  useEffect(() => {
+    // Load Google Identity Services script
+    if (!window.google) {
+      const script = document.createElement('script');
+      script.src = 'https://accounts.google.com/gsi/client';
+      script.async = true;
+      script.defer = true;
+      script.onload = initializeGoogleSignIn;
+      document.head.appendChild(script);
+    } else {
+      initializeGoogleSignIn();
+    }
+  }, [initializeGoogleSignIn]);
 
   const handleCredentialResponse = async (response: any) => {
     try {

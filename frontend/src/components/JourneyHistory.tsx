@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { JourneySummary, UserStats } from '../types/financial.ts';
 import { useAuth } from '../contexts/AuthContext.tsx';
 
@@ -14,13 +14,7 @@ const JourneyHistory: React.FC<JourneyHistoryProps> = ({ userEmail, onLoadJourne
   const [error, setError] = useState<string | null>(null);
   const { token } = useAuth();
 
-  useEffect(() => {
-    if (userEmail) {
-      fetchUserData();
-    }
-  }, [userEmail]);
-
-  const fetchUserData = async () => {
+  const fetchUserData = useCallback(async () => {
     if (!userEmail) return;
     
     setLoading(true);
@@ -74,7 +68,13 @@ const JourneyHistory: React.FC<JourneyHistoryProps> = ({ userEmail, onLoadJourne
     } finally {
       setLoading(false);
     }
-  };
+  }, [userEmail, token]);
+
+  useEffect(() => {
+    if (userEmail) {
+      fetchUserData();
+    }
+  }, [userEmail, fetchUserData]);
 
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString('en-US', {

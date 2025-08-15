@@ -13,7 +13,7 @@ interface FinancialFormProps {
 const FinancialForm: React.FC<FinancialFormProps> = ({ onSubmit, loading }) => {
   const [goals, setGoals] = useState<FinancialGoal[]>([]);
   const [investments, setInvestments] = useState<Investment[]>([]);
-  const { register, handleSubmit, formState: { errors }, watch, trigger, getValues } = useForm<UserFinancialData>();
+  const { register, handleSubmit, formState: { errors }, trigger, getValues } = useForm<UserFinancialData>();
   const { isAuthenticated, user } = useAuth();
   const [showModal, setShowModal] = useState(false);
 
@@ -79,10 +79,7 @@ const FinancialForm: React.FC<FinancialFormProps> = ({ onSubmit, loading }) => {
     onSubmit(formData);
   };
 
-  const formatCurrency = (value: string) => {
-    const num = parseFloat(value);
-    return isNaN(num) ? '' : num.toLocaleString('en-IN');
-  };
+  // formatCurrency function removed - not currently used
 
   const handleRunClick = async () => {
     const valid = await trigger();

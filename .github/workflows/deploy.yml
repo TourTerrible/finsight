@@ -109,12 +109,15 @@ jobs:
           load: true
           tags: ${{ env.REPO }}/${{ env.IMAGE }}:${{ github.sha }}
       
-      - name: Push backend image
+      - name: Tag and push backend image
         env:
           REGISTRY: ${{ env.GCP_REGION }}-docker.pkg.dev
           REPO: finsight-repo
           IMAGE: finsight-backend
         run: |
+          # Tag the local image with the full registry path
+          docker tag ${{ env.REPO }}/${{ env.IMAGE }}:${{ github.sha }} ${{ env.REGISTRY }}/${{ secrets.GCP_PROJECT_ID }}/${{ env.REPO }}/${{ env.IMAGE }}:${{ github.sha }}
+          # Push to registry
           docker push ${{ env.REGISTRY }}/${{ secrets.GCP_PROJECT_ID }}/${{ env.REPO }}/${{ env.IMAGE }}:${{ github.sha }}
       
       - name: Deploy backend to Cloud Run

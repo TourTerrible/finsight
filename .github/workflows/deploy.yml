@@ -173,6 +173,8 @@ jobs:
           projectId: ${{ secrets.FIREBASE_PROJECT_ID }}
           channelId: live
           entryPoint: './frontend'
+        env:
+          FIREBASE_TOKEN: ${{ secrets.FIREBASE_TOKEN }}
 
   # Database setup skipped - using existing Cloud SQL instance
   # deploy-database:

@@ -163,6 +163,7 @@ jobs:
         env:
           REACT_APP_API_URL: ${{ secrets.BACKEND_URL }}
           REACT_APP_GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
+          CI: false
       
       - name: Deploy to Firebase
         uses: FirebaseExtended/action-hosting-deploy@v0

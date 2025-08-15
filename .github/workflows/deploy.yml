@@ -80,23 +80,21 @@ jobs:
       # - name: Configure Docker for GCR
       #   run: gcloud auth configure-docker
 
-      - name: Setup and authenticate with Artifact Registry
+      - name: Setup Artifact Registry
         run: |
-          # Verify repository exists
-          if ! gcloud artifacts repositories describe finsight-repo --location=${{ env.GCP_REGION }} 2>/dev/null; then
-            echo "Creating repository..."
-            gcloud artifacts repositories create finsight-repo \
-              --repository-format=docker \
-              --location=${{ env.GCP_REGION }} \
-              --description="FinSight Docker repository"
-          fi
-      
-      - name: Configure Docker authentication
-        run: |
+          gcloud artifacts repositories create finsight-repo \
+            --repository-format=docker \
+            --location=${{ env.GCP_REGION }} \
+            --description="FinSight Docker repository" \
+            --quiet || echo "Repository already exists"
           gcloud auth configure-docker ${{ env.GCP_REGION }}-docker.pkg.dev --quiet
       
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
+      
+      - name: Login to Artifact Registry
+        run: |
+          gcloud auth configure-docker asia-south1-docker.pkg.dev --quiet
       
       - name: Build and push backend image
         uses: docker/build-push-action@v5
@@ -108,7 +106,7 @@ jobs:
           context: ./backend
           platforms: linux/amd64
           push: true
-          tags: ${{ env.REGISTRY }}/${{ secrets.GCP_PROJECT_ID }}/finsight-repo/finsight-backend:${{ github.sha }}
+          tags: ${{ env.REGISTRY }}/${{ secrets.GCP_PROJECT_ID }} ${{ env.REPO }}/${{ env.IMAGE }}:${{ github.sha }}
       
       - name: Deploy backend to Cloud Run
         env:
@@ -117,7 +115,7 @@ jobs:
           IMAGE: finsight-backend
         run: |
           gcloud run deploy finsight-backend \
-            --image ${{ env.REGISTRY }}/${{ secrets.GCP_PROJECT_ID }}/finsight-repo/finsight-backend:${{ github.sha }} \
+            --image ${{ env.REGISTRY }}/${{ secrets.GCP_PROJECT_ID }}/${{ env.REPO }}/${{ env.IMAGE }}:${{ github.sha }} \
             --platform managed \
             --region ${{ env.GCP_REGION }} \
             --allow-unauthenticated \

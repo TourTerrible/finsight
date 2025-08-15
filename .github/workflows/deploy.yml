@@ -107,7 +107,7 @@ jobs:
           platforms: linux/amd64
           push: false
           load: true
-          tags: ${{ env.REGISTRY }}/${{ secrets.GCP_PROJECT_ID }}/${{ env.REPO }}/${{ env.IMAGE }}:${{ github.sha }}
+          tags: ${{ env.REPO }}/${{ env.IMAGE }}:${{ github.sha }}
       
       - name: Push backend image
         env:

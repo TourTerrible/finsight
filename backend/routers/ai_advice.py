@@ -507,13 +507,13 @@ class IntelligentAIService:
         #     except Exception as e:
         #         print(f"DEBUG: OpenAI failed: {e}")
         
-        # Try Gemini if OpenAI fails
-        # if self.gemini_service.client:
-        #     try:
-        #         print("DEBUG: Trying Gemini service...")
-        #         return self.gemini_service.generate_advice(user_data, simulation_result, specific_concerns)
-        #     except Exception as e:
-        #         print(f"DEBUG: Gemini failed: {e}")
+        #Try Gemini if OpenAI fails
+        if self.gemini_service.client:
+            try:
+                print("DEBUG: Trying Gemini service...")
+                return self.gemini_service.generate_advice(user_data, simulation_result, specific_concerns)
+            except Exception as e:
+                print(f"DEBUG: Gemini failed: {e}")
         
         # Fall back to mock service
         print("DEBUG: Using mock service as fallback")

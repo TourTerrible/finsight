@@ -45,6 +45,7 @@ origins = [
     # Firebase Hosting domains
     "https://finsight-frontend-e2012.web.app",
     "https://finsight-frontend-e2012.firebaseapp.com",
+    "https://finsight.life"
     # Add your production domain here
     # "https://yourdomain.com",
     # "https://www.yourdomain.com",
